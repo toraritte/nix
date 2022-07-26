@@ -26,14 +26,18 @@
     - [Copying Closures via SSH](package-management/copy-closure.md)
     - [Serving a Nix store via SSH](package-management/ssh-substituter.md)
     - [Serving a Nix store via S3](package-management/s3-substituter.md)
-- [Writing Nix Expressions](expressions/writing-nix-expressions.md)
-  - [A Simple Nix Expression](expressions/simple-expression.md)
-    - [Expression Syntax](expressions/expression-syntax.md)
-    - [Build Script](expressions/build-script.md)
-    - [Arguments and Variables](expressions/arguments-variables.md)
+- [Nix Expression Language](expressions/writing-nix-expressions.md)
+  - [Quick Tour: Build a Simple Package](expressions/simple-expression.md)
+    - [Write a Nix Expression](expressions/expression-syntax.md)
+    <!-- - [Expression Syntax](expressions/expression-syntax.md) -->
+    - [Write a Builder](expressions/build-script.md)
+    <!-- - [Build Script](expressions/build-script.md) -->
     - [Building and Testing](expressions/simple-building-testing.md)
+    - [Add to Nixpkgs](expressions/arguments-variables.md)
+    <!-- - [Arguments and Variables](expressions/arguments-variables.md) -->
     - [Generic Builder Syntax](expressions/generic-builder.md)
-  - [Writing Nix Expressions](expressions/expression-language.md)
+  - [Language Elements](expressions/expression-language.md)
+  <!-- - [Writing Nix Expressions](expressions/expression-language.md) -->
     - [Values](expressions/language-values.md)
     - [Language Constructs](expressions/language-constructs.md)
     - [Operators](expressions/language-operators.md)

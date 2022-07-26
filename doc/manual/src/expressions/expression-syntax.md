@@ -1,4 +1,4 @@
-# Expression Syntax
+# Write a Nix derivation expression
 
 Here is a Nix expression for GNU Hello:
 

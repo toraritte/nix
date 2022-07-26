@@ -336,23 +336,51 @@ static void prim_fetchGit(EvalState & state, const PosIdx pos, Value * * args, V
 
 static RegisterPrimOp primop_fetchGit({
     .name = "fetchGit",
-    .args = {"args"},
+    .args = {"referenceToGitRepo -> storeResult"},
     .doc = R"(
-      Fetch a path from git. *args* can be a URL, in which case the HEAD
-      of the repo at that URL is fetched. Otherwise, it can be an
-      attribute with the following attributes (all except `url` optional):
+      Fetch a path using `git`.
 
-        - url\
-          The URL of the repo.
+      ### Types
 
-        - name\
-          The name of the directory the repo should be exported to in the
-          store. Defaults to the basename of the URL.
+      TODO: link all types to doc that has an entry (i.e., basic types)
+      TODO: non-monospaced fonts for basic types for easier discernibility?
+      TODO: examples, examples, examples
 
-        - rev\
-          The git revision to fetch. Defaults to the tip of `ref`.
+      `referenceToGitRepo` = `URL` | `path` | `gitOptions`
 
-        - ref\
+      `URL` :: `string` = `httpURL` | `httpsURL` | `ftpURL` | `fileURL` ① 
+      `httpURL` = A `string` that conforms to [RFC 9110, section 4.2](https://datatracker.ietf.org/doc/html/rfc9110#section-4.2)
+      `httpsURL` = A `string` that conforms to [RFC 9110, section 4.2](https://datatracker.ietf.org/doc/html/rfc9110#section-4.2)
+      `ftpURL` = A `string` that conforms to [RFC 1738, section 3.2](https://datatracker.ietf.org/doc/html/rfc1738#section-3.2)
+      `fileURL` = `"file://"` + `fileURLPathPart`
+      `fileURLPathPart` = A `string` that conforms to [the path syntax of RFC 8089](https://datatracker.ietf.org/doc/html/rfc8089#section-2)
+
+      `path` = [`nixPath`](TODO) | `fileURLPathPart`<sup><b>2</b></sup>
+
+      `gitOptions` :: [`attrSet`](TODO) =  `{ url :: URL [name ④ :: string ? "source"] [ref :: gitReferences ? "HEAD"] [rev :: gitFullCommitHash ? ?] [submodules :: bool ? false] [shallow :: bool ? false] [allRef :: bool ? ?] }`
+
+      `gitReferences` :: `string` = A `string` that is a valid [`git` reference](https://git-scm.com/book/en/v2/Git-Internals-Git-References).
+
+      `gitFullCommitHash` :: `string` = A `string` conforming to the non-abbreviated `git` object name.<sup><b>3</b></sup>
+
+      `storeResult` :: [`attrSet`](TODO)  =  `{ lastModified lastModifiedDate narHash outPath rev revCount shortRev submodules}` 
+
+      > **Note: Impure evaluation when fetched by `path`**
+      >
+      > The fetched content depends on the state of the target repo:
+      > + if ["dirty"](TODO: document; see discourse post), the contents of the target path will be copied verbatim to the Nix store, minus the `.git`  subdirectory.
+      > + if "clean", the latest commit (or HEAD) of the currently checked-out branch will be retrieved.
+
+      ① The latest commit (or HEAD) of the repo's default branch (typically called `main` or `master`) will be fetched. For completeness' sake, the supported URL schemes are: `file://`, `http://`, `https://`, `ftp://`
+
+      \[2]: This `string` will be evaluated by prepending `"file://"` first, hence conformity to [RFC 8089](https://datatracker.ietf.org/doc/html/rfc8089) is required.
+
+      \[3]: According to `git` docs, "_the full SHA-1 object name (40-byte hexadecimal string)_", but [it may be subject to change](https://git-scm.com/docs/hash-function-transition/).
+
+      ④ The name part of the Nix store path (TODO: link to where this is explained) where the `git` repo's content will be copied to.
+      
+
+        - `ref` (optional)\
           The git ref to look for the requested revision under. This is
           often a branch or tag name. Defaults to `HEAD`.
 
@@ -360,101 +388,105 @@ static RegisterPrimOp primop_fetchGit({
           of Nix 2.3.0 Nix will not prefix `refs/heads/` if `ref` starts
           with `refs/`.
 
-        - submodules\
+        - `rev` (optional)\
+          The [`git` revision](https://git-scm.com/docs/git-rev-parse#_specifying_revisions) to fetch.\
+          *Default value*: if the `ref` attribute (see above) is specified, 
+
+        - `submodules` (optional)\
           A Boolean parameter that specifies whether submodules should be
           checked out. Defaults to `false`.
 
-        - shallow\
+        - `shallow` (optional)\
           A Boolean parameter that specifies whether fetching a shallow clone
           is allowed. Defaults to `false`.
 
-        - allRefs\
+        - `allRefs` (optional)\
           Whether to fetch all refs of the repository. With this argument being
           true, it's possible to load a `rev` from *any* `ref` (by default only
           `rev`s from the specified `ref` are supported).
 
       Here are some examples of how to use `fetchGit`.
 
-        - To fetch a private repository over SSH:
+      - To fetch a private repository over SSH:
 
-          ```nix
-          builtins.fetchGit {
-            url = "git@github.com:my-secret/repository.git";
-            ref = "master";
-            rev = "adab8b916a45068c044658c4158d81878f9ed1c3";
-          }
-          ```
+        ```nix
+        builtins.fetchGit {
+          url = "git@github.com:my-secret/repository.git";
+          ref = "master";
+          rev = "adab8b916a45068c044658c4158d81878f9ed1c3";
+        }
+        ```
 
-        - To fetch an arbitrary reference:
+      - To fetch an arbitrary reference:
 
-          ```nix
-          builtins.fetchGit {
-            url = "https://github.com/NixOS/nix.git";
-            ref = "refs/heads/0.5-release";
-          }
-          ```
+        ```nix
+        builtins.fetchGit {
+          url = "https://github.com/NixOS/nix.git";
+          ref = "refs/heads/0.5-release";
+        }
+        ```
 
-        - If the revision you're looking for is in the default branch of
-          the git repository you don't strictly need to specify the branch
-          name in the `ref` attribute.
+      - If the revision you're looking for is in the default branch of
+        the git repository you don't strictly need to specify the branch
+        name in the `ref` attribute.
 
-          However, if the revision you're looking for is in a future
-          branch for the non-default branch you will need to specify the
-          the `ref` attribute as well.
+        However, if the revision you're looking for is in a future
+        branch for the non-default branch you will need to specify the
+        the `ref` attribute as well.
 
-          ```nix
-          builtins.fetchGit {
-            url = "https://github.com/nixos/nix.git";
-            rev = "841fcbd04755c7a2865c51c1e2d3b045976b7452";
-            ref = "1.11-maintenance";
-          }
-          ```
+        ```nix
+        builtins.fetchGit {
+          url = "https://github.com/nixos/nix.git";
+          rev = "841fcbd04755c7a2865c51c1e2d3b045976b7452";
+          ref = "1.11-maintenance";
+        }
+        ```
 
-          > **Note**
-          >
-          > It is nice to always specify the branch which a revision
-          > belongs to. Without the branch being specified, the fetcher
-          > might fail if the default branch changes. Additionally, it can
-          > be confusing to try a commit from a non-default branch and see
-          > the fetch fail. If the branch is specified the fault is much
-          > more obvious.
+        > **Note**
+        >
+        > It is nice to always specify the branch which a revision
+        > belongs to. Without the branch being specified, the fetcher
+        > might fail if the default branch changes. Additionally, it can
+        > be confusing to try a commit from a non-default branch and see
+        > the fetch fail. If the branch is specified the fault is much
+        > more obvious.
 
-        - If the revision you're looking for is in the default branch of
-          the git repository you may omit the `ref` attribute.
+      - If the revision you're looking for is in the default branch of
+        the git repository you may omit the `ref` attribute.
 
-          ```nix
-          builtins.fetchGit {
-            url = "https://github.com/nixos/nix.git";
-            rev = "841fcbd04755c7a2865c51c1e2d3b045976b7452";
-          }
-          ```
+        ```nix
+        builtins.fetchGit {
+          url = "https://github.com/nixos/nix.git";
+          rev = "841fcbd04755c7a2865c51c1e2d3b045976b7452";
+        }
+        ```
 
-        - To fetch a specific tag:
+      - To fetch a specific tag:
 
-          ```nix
-          builtins.fetchGit {
-            url = "https://github.com/nixos/nix.git";
-            ref = "refs/tags/1.9";
-          }
-          ```
+        ```nix
+        builtins.fetchGit {
+          url = "https://github.com/nixos/nix.git";
+          ref = "refs/tags/1.9";
+        }
+        ```
 
-        - To fetch the latest version of a remote branch:
+      - To fetch the latest version of a remote branch:
 
-          ```nix
-          builtins.fetchGit {
-            url = "ssh://git@github.com/nixos/nix.git";
-            ref = "master";
-          }
-          ```
+        ```nix
+        builtins.fetchGit {
+          url = "ssh://git@github.com/nixos/nix.git";
+          ref = "master";
+        }
+        ```
 
-          > **Note**
-          >
-          > Nix will refetch the branch in accordance with
-          > the option `tarball-ttl`.
+        > **Note**
+        >
+        > Nix will refetch the branch in accordance with
+        > the option `tarball-ttl`.
 
-          > **Note**
-          >
-          > This behavior is disabled in *Pure evaluation mode*.
+        > **Note**
+        >
+        > This behavior is disabled in *Pure evaluation mode*.
     )",
     .fun = prim_fetchGit,
 });
