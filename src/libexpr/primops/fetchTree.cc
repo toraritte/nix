@@ -338,7 +338,7 @@ static RegisterPrimOp primop_fetchGit({
     .name = "fetchGit",
     .args = {"referenceToGitRepo -> storeResult"},
     .doc = R"(
-      Fetch a path using `git`.
+      Fetch a Git repo.
 
       ### Types
 
@@ -346,38 +346,82 @@ static RegisterPrimOp primop_fetchGit({
       TODO: non-monospaced fonts for basic types for easier discernibility?
       TODO: examples, examples, examples
 
-      `referenceToGitRepo` = `URL` | `path` | `gitOptions`
+      **referenceToGitRepo** = **URL** | **path** | **gitArgs**
 
-      `URL` :: `string` = `httpURL` | `httpsURL` | `ftpURL` | `fileURL` ① 
-      `httpURL` = A `string` that conforms to [RFC 9110, section 4.2](https://datatracker.ietf.org/doc/html/rfc9110#section-4.2)
-      `httpsURL` = A `string` that conforms to [RFC 9110, section 4.2](https://datatracker.ietf.org/doc/html/rfc9110#section-4.2)
-      `ftpURL` = A `string` that conforms to [RFC 1738, section 3.2](https://datatracker.ietf.org/doc/html/rfc1738#section-3.2)
-      `fileURL` = `"file://"` + `fileURLPathPart`
-      `fileURLPathPart` = A `string` that conforms to [the path syntax of RFC 8089](https://datatracker.ietf.org/doc/html/rfc8089#section-2)
+      ---
 
-      `path` = [`nixPath`](TODO) | `fileURLPathPart`<sup><b>2</b></sup>
+      **URL** = **httpURL** | **httpsURL** | **ftpURL** | **fileURL**
 
-      `gitOptions` :: [`attrSet`](TODO) =  `{ url :: URL [name ④ :: string ? "source"] [ref :: gitReferences ? "HEAD"] [rev :: gitFullCommitHash ? ?] [submodules :: bool ? false] [shallow :: bool ? false] [allRef :: bool ? ?] }`
+      **httpURL** = [string](TODO)\
+      &nbsp;&nbsp;Needs to conform to the `http://` URI scheme (see [RFC 9110, section 4.2](https://datatracker.ietf.org/doc/html/rfc9110#section-4.2)).
 
-      `gitReferences` :: `string` = A `string` that is a valid [`git` reference](https://git-scm.com/book/en/v2/Git-Internals-Git-References).
+      **httpsURL** = [string](TODO)\
+      &nbsp;&nbsp;Needs to conform to the `https://` URI scheme (see [RFC 9110, section 4.2](https://datatracker.ietf.org/doc/html/rfc9110#section-4.2)).
 
-      `gitFullCommitHash` :: `string` = A `string` conforming to the non-abbreviated `git` object name.<sup><b>3</b></sup>
+      **ftpURL** = [string](TODO)\
+      &nbsp;&nbsp;Needs to conform to the `ftp://` URI scheme (see [RFC 1738, section 3.2](https://datatracker.ietf.org/doc/html/rfc1738#section-3.2)).
 
-      `storeResult` :: [`attrSet`](TODO)  =  `{ lastModified lastModifiedDate narHash outPath rev revCount shortRev submodules}` 
+      **fileURL** = `"file://"` + **fileURLPathPart**\
+      **fileURLPathPart** = [string](TODO)\
+      &nbsp;&nbsp;Both need to conform to the `file://` URI scheme (see [the path syntax of RFC 8089](https://datatracker.ietf.org/doc/html/rfc8089#section-2)).
 
-      > **Note: Impure evaluation when fetched by `path`**
-      >
-      > The fetched content depends on the state of the target repo:
-      > + if ["dirty"](TODO: document; see discourse post), the contents of the target path will be copied verbatim to the Nix store, minus the `.git`  subdirectory.
-      > + if "clean", the latest commit (or HEAD) of the currently checked-out branch will be retrieved.
+      ---
+
+      **path** = [Nix path](TODO) | **fileURLPathPart**
+
+      ---
+
+      **gitArgs** :: [attribute set](TODO) =\
+      &nbsp;&nbsp;{ `url` :: (**URL** | **path**);\
+      &nbsp;&nbsp;&nbsp;&nbsp;[ `name` :: [string](TODO) ? `"source"` ];\
+      &nbsp;&nbsp;&nbsp;&nbsp;[ `ref` :: **gitReferences** ? `"HEAD"` ];\
+      &nbsp;&nbsp;&nbsp;&nbsp;[ `rev` :: **gitFullCommitHash** ? ? ];\
+      &nbsp;&nbsp;&nbsp;&nbsp;[ `submodules` :: [boolean](TODO) ? `false` ];\
+      &nbsp;&nbsp;&nbsp;&nbsp;[ `shallow` :: [boolean](TODO) ? `false` ];\
+      &nbsp;&nbsp;&nbsp;&nbsp;[ `allRef` :: [boolean](TODO) ? ? ];\
+      &nbsp;&nbsp;}
+
+      **gitReferences** = [string](TODO)\
+      &nbsp;&nbsp;Needs to be valid [Git reference](https://git-scm.com/book/en/v2/Git-Internals-Git-References).
+
+      **gitFullCommitHash** = [string](TODO)\
+      &nbsp;&nbsp;Has to be full SHA-1 ([for now](https://git-scm.com/docs/hash-function-transition/) object name (40-byte hexadecimal string) that refers to an existing commit in the repo.
+
+      **storeResult** :: [attribute set](TODO)  =  `{ lastModified lastModifiedDate narHash outPath rev revCount shortRev submodules}` 
+
+      ### Calling with a path
+
+      Example arguments:
+
+      + [Nix path](TODO): `~/clones/nix` 
+
+      + **fileURL**: `"file:///home/a_user/clones/nix"`
+
+      + **fileURLPathPart**: `"/home/a_user/clones/nix"`\
+        (This [string](TODO) will be prefixed with `"file://"`, and then evaluated as a **fileURL**.)
+
+      + **gitArgs**:
+        + `{ url = ~/clones/nix; }`
+        + `{ url = "/home/a_user/clones/nix"; }`
+        + `{ url = "file:///home/a_user/clones/nix"; }`
+
+      If the fetched repo is
+
+      + ["dirty"](TODO: document; see discourse post):\
+        All uncommitted and/or unstaged changes will also be copied to the Nix store. **storeResult**'s `rev`, `shortRev`, and `revCount` attributes will be all zeroes (as there is no commit associated with these changes yet).
+
+        To ignore changes when fetching a "dirty" repo, make sure to call **gitArgs** with `ref` or `rev` (e.g., `{ url = ./.; ref = "main"; }`.). See more below.
+
+      + "clean":\
+        The latest commit (or HEAD) of the currently checked-out branch will be retrieved.
 
       ① The latest commit (or HEAD) of the repo's default branch (typically called `main` or `master`) will be fetched. For completeness' sake, the supported URL schemes are: `file://`, `http://`, `https://`, `ftp://`
 
-      \[2]: This `string` will be evaluated by prepending `"file://"` first, hence conformity to [RFC 8089](https://datatracker.ietf.org/doc/html/rfc8089) is required.
+      \[2]: This [string](TODO) will be evaluated by prepending `"file://"` first, hence conformity to [RFC 8089](https://datatracker.ietf.org/doc/html/rfc8089) is required.
 
-      \[3]: According to `git` docs, "_the full SHA-1 object name (40-byte hexadecimal string)_", but [it may be subject to change](https://git-scm.com/docs/hash-function-transition/).
+      \[3]: "_The full SHA-1 object name (40-byte hexadecimal string)_", but [it may be subject to change](https://git-scm.com/docs/hash-function-transition/).
 
-      ④ The name part of the Nix store path (TODO: link to where this is explained) where the `git` repo's content will be copied to.
+      ④ The name part of the Nix store path (TODO: link to where this is explained) where the Git repo's content will be copied to.
       
 
         - `ref` (optional)\
@@ -389,7 +433,7 @@ static RegisterPrimOp primop_fetchGit({
           with `refs/`.
 
         - `rev` (optional)\
-          The [`git` revision](https://git-scm.com/docs/git-rev-parse#_specifying_revisions) to fetch.\
+          The [Git revision](https://git-scm.com/docs/git-rev-parse#_specifying_revisions) to fetch.\
           *Default value*: if the `ref` attribute (see above) is specified, 
 
         - `submodules` (optional)\
